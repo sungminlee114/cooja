@@ -699,6 +699,7 @@ public class Cooja extends Observable {
     guiActions.add(startStopSimulationAction);
     guiActions.add(removeAllMotesAction);
     guiActions.add(showBufferSettingsAction);
+    guiActions.add(dataTraceAction);
 
     /* Menus */
     JMenuBar menuBar = new JMenuBar();
@@ -1094,6 +1095,9 @@ public class Cooja extends Observable {
     }
 
     settingsMenu.add(new JMenuItem(showBufferSettingsAction));
+    JCheckBoxMenuItem dtCheckBox = new JCheckBoxMenuItem(dataTraceAction);
+    dataTraceAction.putValue("checkbox", dtCheckBox);
+    settingsMenu.add(dtCheckBox);
 
     /* Help */
     helpMenu.add(new JMenuItem(showGettingStartedAction));
@@ -3515,7 +3519,6 @@ public class Cooja extends Observable {
    * Saves current simulation configuration to given file and notifies
    * observers.
    *
-   * @see #loadSimulationConfig(File, boolean)
    * @param file
    *          File to write
    */
@@ -4658,8 +4661,8 @@ public class Cooja extends Observable {
     }
   };
   GUIAction startStopSimulationAction = new GUIAction("Start simulation", KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.CTRL_MASK)) {
-		private static final long serialVersionUID = 6750107157493939710L;
-		public void actionPerformed(ActionEvent e) {
+    private static final long serialVersionUID = 6750107157493939710L;
+    public void actionPerformed(ActionEvent e) {
       /* Start/Stop current simulation */
       Simulation s = getSimulation();
       if (s == null) {
@@ -4731,7 +4734,7 @@ public class Cooja extends Observable {
       boolean show = ((JCheckBoxMenuItem) e.getSource()).isSelected();
       quickHelpTextPane.setVisible(show);
       quickHelpScroll.setVisible(show);
-      setExternalToolsSetting("SHOW_QUICKHELP", new Boolean(show).toString());
+      setExternalToolsSetting("SHOW_QUICKHELP", Boolean.toString(show));
       ((JPanel)frame.getContentPane()).revalidate();
       updateDesktopSize(getDesktopPane());
     }
@@ -4784,6 +4787,29 @@ public class Cooja extends Observable {
       }
       BufferSettings.showDialog(myDesktopPane, mySimulation);
     }
+    public boolean shouldBeEnabled() {
+      return mySimulation != null;
+    }
+  };
+  GUIAction dataTraceAction = new GUIAction("Save Data Traces", 'd') {
+
+    public void actionPerformed(ActionEvent e) {
+      if (!(e.getSource() instanceof JCheckBoxMenuItem)) {
+        return;
+      }
+      boolean enabled = ((JCheckBoxMenuItem) e.getSource()).isSelected();
+      mySimulation.getEventCentral().setDataTraceEnabled(enabled);
+    }
+
+    public void setEnabled(boolean newValue) {
+      Simulation s = getSimulation();
+      JCheckBoxMenuItem checkBox = ((JCheckBoxMenuItem)getValue("checkbox"));
+      if (checkBox != null) {
+        checkBox.setSelected(s != null && s.getEventCentral().isDataTraceEnabled());
+      }
+      super.setEnabled(newValue);
+    }
+
     public boolean shouldBeEnabled() {
       return mySimulation != null;
     }
