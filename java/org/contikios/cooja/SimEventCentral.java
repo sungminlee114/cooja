@@ -136,6 +136,7 @@ public class SimEventCentral {
     PrintWriter output = this.eventOutput;
     if (output != null) {
       output.println(simulation.getSimulationTime() + "\t" + eventType + "\t" + description);
+      output.flush();
     }
   }
 
