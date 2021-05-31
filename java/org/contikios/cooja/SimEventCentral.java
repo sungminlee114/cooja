@@ -110,14 +110,14 @@ public class SimEventCentral {
     if (!this.isDataTraceEnabled) {
       return null;
     }
-    if (this.configName == null) {
-      logger.warn("no simulation name available for data trace!");
-      return null;
-    }
     if (this.dataTracePath == null) {
       String traceName = this.simulation.getCooja().getNextDataTraceName();
       boolean useConfigPath = false;
       if (traceName == null) {
+        if (this.configName == null) {
+          logger.warn("no simulation name available for data trace!");
+          return null;
+        }
         // No name specified - use default name
         traceName = this.configName + "-dt-" + System.currentTimeMillis();
         useConfigPath = true;
