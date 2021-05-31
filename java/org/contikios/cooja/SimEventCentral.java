@@ -63,6 +63,7 @@ public class SimEventCentral {
   private final Simulation simulation;
   private final File configPath;
   private final String configName;
+  private final String traceName;
   private boolean isDataTraceEnabled = false;
   private boolean isObserving = false;
   private File dataTracePath = null;
@@ -74,6 +75,12 @@ public class SimEventCentral {
 
   public SimEventCentral(Simulation simulation) {
     this.simulation = simulation;
+    this.traceName = this.simulation.getCooja().getNextDataTraceName();
+
+    if (this.traceName != null) {
+      /* Auto enable data traces if a data trace name has been set */
+      this.isDataTraceEnabled = true;
+    }
 
     File configFile = simulation.getCooja().currentConfigFile;
     File path = configFile != null ? configFile.getParentFile() : null;
@@ -95,7 +102,6 @@ public class SimEventCentral {
     /* Default buffer sizes */
     logOutputBufferSize = Integer.parseInt(Cooja.getExternalToolsSetting("BUFFERSIZE_LOGOUTPUT", "" + 40000));
 
-
     moteObservations = new ArrayList<MoteObservation>();
 
     /* Mote count: notifications */
@@ -105,34 +111,34 @@ public class SimEventCentral {
     logOutputListeners = new LogOutputListener[0];
     logOutputEvents = new ArrayDeque<LogOutputEvent>();
   }
-  
+
   public synchronized File getSimulationLogFile(String name, String suffix) {
     if (!this.isDataTraceEnabled) {
       return null;
     }
     if (this.dataTracePath == null) {
-      String traceName = this.simulation.getCooja().getNextDataTraceName();
+      String dataTraceName = this.traceName;
       boolean useConfigPath = false;
-      if (traceName == null) {
+      if (dataTraceName == null) {
         if (this.configName == null) {
           logger.warn("no simulation name available for data trace!");
           return null;
         }
         // No name specified - use default name
-        traceName = this.configName + "-dt-" + System.currentTimeMillis();
+        dataTraceName = this.configName + "-dt-" + System.currentTimeMillis();
         useConfigPath = true;
       }
-      File p = useConfigPath ? new File(this.configPath, traceName) : new File(traceName);
+      File p = useConfigPath ? new File(this.configPath, dataTraceName) : new File(dataTraceName);
       if (!p.mkdir()) {
         boolean success = false;
         for (int retry = 1; retry < 10 && !success; retry++) {
-          String nextName = traceName + "-" + retry;
-          logger.warn("failed to create data trace directory '" + traceName + "'. Testing '" + nextName + "'.");
+          String nextName = dataTraceName + "-" + retry;
+          logger.warn("failed to create data trace directory '" + dataTraceName + "'. Testing '" + nextName + "'.");
           p = useConfigPath ? new File(this.configPath, nextName) : new File(nextName);
           success = p.mkdir();
         }
         if (!success) {
-          logger.warn("failed to create data trace directory '" + traceName + "!");
+          logger.warn("failed to create data trace directory '" + dataTraceName + "!");
           return null;
         }
       }
@@ -644,7 +650,10 @@ public class SimEventCentral {
       if (name.equals("logoutput")) {
         logOutputBufferSize = Integer.parseInt(element.getText());
       } else if (name.equals("datatrace")) {
-        this.isDataTraceEnabled = Boolean.valueOf(element.getText());
+        /* Ignore configured data trace value if a data trace name has been set */
+        if (this.traceName == null) {
+          this.isDataTraceEnabled = Boolean.valueOf(element.getText());
+        }
       }
     }
     return true;
