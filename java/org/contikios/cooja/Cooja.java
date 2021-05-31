@@ -3175,12 +3175,14 @@ public class Cooja extends Observable {
   public static void main(String[] args) {
     String logConfigFile = null;
     Long randomSeed = null;
-    
-    
+    boolean noGui = GraphicsEnvironment.isHeadless();
+
     for (String element : args) {
       if (element.startsWith("-log4j=")) {
         String arg = element.substring("-log4j=".length());
         logConfigFile = arg;
+      } else if (element.startsWith("-nogui=")) {
+        noGui = true;
       }
     }
 
@@ -3206,8 +3208,10 @@ public class Cooja extends Observable {
       externalToolsUserSettingsFile = null;
     }
 
-    /* Look and Feel: Nimbus */
-    setLookAndFeel();
+    if (!noGui) {
+      /* Look and Feel: Nimbus */
+      setLookAndFeel();
+    }
 
     /* Warn at no JAVA_HOME */
     String javaHome = System.getenv().get("JAVA_HOME");
