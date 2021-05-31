@@ -206,7 +206,7 @@ public class Cooja extends Observable {
   /**
    * Custom simulation id for next simulation
    */
-   private static String nextSimulationName;
+   private static String nextDataTraceName;
 
   /**
    * Logger settings filename.
@@ -466,11 +466,11 @@ public class Cooja extends Observable {
     Runtime.getRuntime().addShutdownHook(new ShutdownHandler(this));
   }
 
-  public String getNextSimulationName() {
-    String id = Cooja.nextSimulationName;
-    if (id != null) {
-      Cooja.nextSimulationName = null;
-      return id;
+  public String getNextDataTraceName() {
+    String name = Cooja.nextDataTraceName;
+    if (name != null) {
+      Cooja.nextDataTraceName = null;
+      return name;
     }
     return null;
   }
@@ -3248,8 +3248,8 @@ public class Cooja extends Observable {
           logger.error("Failed to convert \"" + arg +"\" to an integer.");
         }
 
-      } else if (element.startsWith("-simulationName=")) {
-        Cooja.nextSimulationName = element.substring("-simulationName=".length());
+      } else if (element.startsWith("-datatrace=")) {
+        Cooja.nextDataTraceName = element.substring("-datatrace=".length());
       }
     }
 

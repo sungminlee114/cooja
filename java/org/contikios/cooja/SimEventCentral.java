@@ -115,7 +115,7 @@ public class SimEventCentral {
       return null;
     }
     if (this.dataTracePath == null) {
-      String traceName = this.simulation.getCooja().getNextSimulationName();
+      String traceName = this.simulation.getCooja().getNextDataTraceName();
       boolean useConfigPath = false;
       if (traceName == null) {
         // No name specified - use default name
@@ -132,7 +132,7 @@ public class SimEventCentral {
           success = p.mkdir();
         }
         if (!success) {
-          logger.warn("failed to create data trace directory!");
+          logger.warn("failed to create data trace directory '" + traceName + "!");
           return null;
         }
       }
