@@ -204,6 +204,11 @@ public class Cooja extends Observable {
   private static String specifiedContikiPath = null;
 
   /**
+   * Custom simulation id for next simulation
+   */
+   private static String nextSimulationName;
+
+  /**
    * Logger settings filename.
    */
   public static final String LOG_CONFIG_FILE = "log4j_config.xml";
@@ -461,6 +466,14 @@ public class Cooja extends Observable {
     Runtime.getRuntime().addShutdownHook(new ShutdownHandler(this));
   }
 
+  public String getNextSimulationName() {
+    String id = Cooja.nextSimulationName;
+    if (id != null) {
+      Cooja.nextSimulationName = null;
+      return id;
+    }
+    return null;
+  }
 
   /**
    * Add mote highlight observer.
@@ -3207,33 +3220,32 @@ public class Cooja extends Observable {
       if (element.startsWith("-contiki=")) {
         String arg = element.substring("-contiki=".length());
         Cooja.specifiedContikiPath = arg;
-      }
 
-      if (element.startsWith("-cooja=")) {
+      } else if (element.startsWith("-cooja=")) {
         String arg = element.substring("-cooja=".length());
         Cooja.specifiedCoojaPath = arg;
-      }
 
-      if (element.startsWith("-external_tools_config=")) {
+      } else if (element.startsWith("-external_tools_config=")) {
         String arg = element.substring("-external_tools_config=".length());
         File specifiedExternalToolsConfigFile = new File(arg);
         if (!specifiedExternalToolsConfigFile.exists()) {
           logger.fatal("Specified external tools configuration not found: " + specifiedExternalToolsConfigFile);
-          specifiedExternalToolsConfigFile = null;
           System.exit(1);
         } else {
           Cooja.externalToolsUserSettingsFile = specifiedExternalToolsConfigFile;
           Cooja.externalToolsUserSettingsFileReadOnly = true;
         }
-      }
-      
-      if (element.startsWith("-random-seed=")) {
+
+      } else if (element.startsWith("-random-seed=")) {
         String arg = element.substring("-random-seed=".length());
         try {          
           randomSeed =  Long.valueOf(arg);
         } catch (Exception e) {
           logger.error("Failed to convert \"" + arg +"\" to an integer.");
         }
+
+      } else if (element.startsWith("-simulationName=")) {
+        Cooja.nextSimulationName = element.substring("-simulationName=".length());
       }
     }
 
@@ -3287,7 +3299,6 @@ public class Cooja extends Observable {
       if (sim == null) {
         System.exit(1);
       }
-      
 
     } else if (args.length > 0 && args[0].startsWith("-nogui=")) {
 

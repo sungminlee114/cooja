@@ -63,9 +63,9 @@ public class SimEventCentral {
   private final Simulation simulation;
   private final File configPath;
   private final String configName;
-  private final long simulationId = System.currentTimeMillis();
   private boolean isDataTraceEnabled = false;
   private boolean isObserving = false;
+  private File dataTracePath = null;
   private RadioMedium radioMedium = null;
   private PcapExporter pcapExporter = null;
   private PrintWriter radioMediumOutput = null;
@@ -95,7 +95,7 @@ public class SimEventCentral {
     /* Default buffer sizes */
     logOutputBufferSize = Integer.parseInt(Cooja.getExternalToolsSetting("BUFFERSIZE_LOGOUTPUT", "" + 40000));
 
-    
+
     moteObservations = new ArrayList<MoteObservation>();
 
     /* Mote count: notifications */
@@ -106,7 +106,7 @@ public class SimEventCentral {
     logOutputEvents = new ArrayDeque<LogOutputEvent>();
   }
   
-  public File getSimulationLogFile(String name, String suffix) {
+  public synchronized File getSimulationLogFile(String name, String suffix) {
     if (!this.isDataTraceEnabled) {
       return null;
     }
@@ -114,7 +114,28 @@ public class SimEventCentral {
       logger.warn("no simulation name available for data trace!");
       return null;
     }
-    File fp = new File(this.configPath, this.configName + "-dt-" + this.simulationId + '-' + name + '.' + suffix);
+    if (this.dataTracePath == null) {
+      String traceName = this.simulation.getCooja().getNextSimulationName();
+      if (traceName == null) {
+        // No name specified - use default name
+        traceName = this.configName + "-dt-" + System.currentTimeMillis();
+      }
+      File p = new File(this.configPath, traceName);
+      if (!p.mkdir()) {
+        boolean success = false;
+        for (int retry = 1; retry < 10 && !success; retry++) {
+          logger.warn("data trace directory '" + traceName + "' already exists. Retrying " + retry);
+          p = new File(this.configPath, traceName + "-" + retry);
+          success = p.mkdir();
+        }
+        if (!success) {
+          logger.warn("failed to create data trace directory!");
+          return null;
+        }
+      }
+      this.dataTracePath = p;
+    }
+    File fp = new File(this.dataTracePath, name + '.' + suffix);
     logger.info("simulation data trace '" + fp.getAbsolutePath() + "'");
     return fp;
   }
@@ -192,7 +213,7 @@ public class SimEventCentral {
     if (this.isDataTraceEnabled) {
       this.moteLogOutput = startPrintWriter(this.moteLogOutput, "mote-output", "log",
                                             "time\tmote\tmessage");
-      this.eventOutput = startPrintWriter(this.eventOutput, "event-output", "log",
+      this.eventOutput = startPrintWriter(this.eventOutput, "events", "log",
                                           "time\tname\tdescription");
       this.radioMediumOutput = startPrintWriter(this.radioMediumOutput, "radio-medium", "log",
                                                 "startTime\tendTime\tchannel\tsource"
