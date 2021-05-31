@@ -116,16 +116,19 @@ public class SimEventCentral {
     }
     if (this.dataTracePath == null) {
       String traceName = this.simulation.getCooja().getNextSimulationName();
+      boolean useConfigPath = false;
       if (traceName == null) {
         // No name specified - use default name
         traceName = this.configName + "-dt-" + System.currentTimeMillis();
+        useConfigPath = true;
       }
-      File p = new File(this.configPath, traceName);
+      File p = useConfigPath ? new File(this.configPath, traceName) : new File(traceName);
       if (!p.mkdir()) {
         boolean success = false;
         for (int retry = 1; retry < 10 && !success; retry++) {
-          logger.warn("data trace directory '" + traceName + "' already exists. Retrying " + retry);
-          p = new File(this.configPath, traceName + "-" + retry);
+          String nextName = traceName + "-" + retry;
+          logger.warn("failed to create data trace directory '" + traceName + "'. Testing '" + nextName + "'.");
+          p = useConfigPath ? new File(this.configPath, nextName) : new File(nextName);
           success = p.mkdir();
         }
         if (!success) {
