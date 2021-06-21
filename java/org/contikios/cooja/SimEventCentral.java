@@ -29,6 +29,7 @@
 package org.contikios.cooja;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Observable;
 import java.util.Observer;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 import org.contikios.cooja.interfaces.Radio;
@@ -65,6 +67,7 @@ public class SimEventCentral {
   private final String configName;
   private final String traceName;
   private boolean isDataTraceEnabled = false;
+  private boolean isDataTraceCompressed = false;
   private boolean isObserving = false;
   private File dataTracePath = null;
   private RadioMedium radioMedium = null;
@@ -112,7 +115,7 @@ public class SimEventCentral {
     logOutputEvents = new ArrayDeque<LogOutputEvent>();
   }
 
-  public synchronized File getSimulationLogFile(String name, String suffix) {
+  public synchronized File getSimulationLogFile(String name, String suffix, boolean compress) {
     if (!this.isDataTraceEnabled) {
       return null;
     }
@@ -144,6 +147,9 @@ public class SimEventCentral {
       }
       this.dataTracePath = p;
     }
+    if (compress) {
+      suffix += ".gz";
+    }
     File fp = new File(this.dataTracePath, name + '.' + suffix);
     logger.info("simulation data trace '" + fp.getAbsolutePath() + "'");
     return fp;
@@ -162,6 +168,16 @@ public class SimEventCentral {
     }
   }
 
+  public boolean isDataTraceCompressed() {
+    return this.isDataTraceCompressed;
+  }
+
+  public void setDataTraceCompressed(boolean enabled) {
+    if (this.isDataTraceCompressed != enabled) {
+      this.isDataTraceCompressed = enabled;
+    }
+  }
+
   public void logEvent(String eventType, String description) {
     PrintWriter output = this.eventOutput;
     if (output != null) {
@@ -172,10 +188,15 @@ public class SimEventCentral {
 
   private PrintWriter startPrintWriter(PrintWriter output, String name, String suffix, String description) {
     if (output == null) {
-      File outputFilename = getSimulationLogFile(name, suffix);
+      boolean compress = this.isDataTraceCompressed;
+      File outputFilename = getSimulationLogFile(name, suffix, compress);
       if (outputFilename != null) {
         try {
-          output = new PrintWriter(new FileWriter(outputFilename, true));
+          if (this.isDataTraceCompressed) {
+            output = new PrintWriter(new GZIPOutputStream(new FileOutputStream(outputFilename)));
+          } else {
+            output = new PrintWriter(new FileWriter(outputFilename, true));
+          }
           if (description != null && !description.isBlank()) {
             output.println("# "+ description);
           }
@@ -228,11 +249,12 @@ public class SimEventCentral {
                                                 "startTime\tendTime\tchannel\tsource"
                                                 + "\tdestinations\tinterfered\tinterferedNonDestinations\tdata");
       if (this.pcapExporter == null) {
-        File pcapFile = getSimulationLogFile("radio-log", "pcap");
+        boolean compress = this.isDataTraceCompressed;
+        File pcapFile = getSimulationLogFile("radio-log", "pcap", compress);
         if (pcapFile != null) {
           try {
             this.pcapExporter = new PcapExporter();
-            this.pcapExporter.openPcap(pcapFile);
+            this.pcapExporter.openPcap(pcapFile, compress);
           } catch (IOException e) {
             logger.error("failed to setup PCAP export", e);
           }

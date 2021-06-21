@@ -713,6 +713,7 @@ public class Cooja extends Observable {
     guiActions.add(removeAllMotesAction);
     guiActions.add(showBufferSettingsAction);
     guiActions.add(dataTraceAction);
+    guiActions.add(compressDataTraceAction);
 
     /* Menus */
     JMenuBar menuBar = new JMenuBar();
@@ -1111,6 +1112,9 @@ public class Cooja extends Observable {
     JCheckBoxMenuItem dtCheckBox = new JCheckBoxMenuItem(dataTraceAction);
     dataTraceAction.putValue("checkbox", dtCheckBox);
     settingsMenu.add(dtCheckBox);
+    JCheckBoxMenuItem compressDtCheckBox = new JCheckBoxMenuItem(compressDataTraceAction);
+    compressDataTraceAction.putValue("checkbox", compressDtCheckBox);
+    settingsMenu.add(compressDtCheckBox);
 
     /* Help */
     helpMenu.add(new JMenuItem(showGettingStartedAction));
@@ -4821,6 +4825,30 @@ public class Cooja extends Observable {
       JCheckBoxMenuItem checkBox = ((JCheckBoxMenuItem)getValue("checkbox"));
       if (checkBox != null) {
         checkBox.setSelected(s != null && s.getEventCentral().isDataTraceEnabled());
+      }
+      super.setEnabled(newValue);
+    }
+
+    public boolean shouldBeEnabled() {
+      return mySimulation != null;
+    }
+  };
+
+  GUIAction compressDataTraceAction = new GUIAction("Compress Data Traces", 'd') {
+
+    public void actionPerformed(ActionEvent e) {
+      if (!(e.getSource() instanceof JCheckBoxMenuItem)) {
+        return;
+      }
+      boolean enabled = ((JCheckBoxMenuItem) e.getSource()).isSelected();
+      mySimulation.getEventCentral().setDataTraceCompressed(enabled);
+    }
+
+    public void setEnabled(boolean newValue) {
+      Simulation s = getSimulation();
+      JCheckBoxMenuItem checkBox = ((JCheckBoxMenuItem)getValue("checkbox"));
+      if (checkBox != null) {
+        checkBox.setSelected(s != null && s.getEventCentral().isDataTraceCompressed());
       }
       super.setEnabled(newValue);
     }

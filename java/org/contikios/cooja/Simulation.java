@@ -1143,6 +1143,15 @@ public class Simulation extends Observable implements Runnable {
   }
 
   /**
+   * Return ture if the simulation is or has been running.
+   *
+   * @return True if simulation is or has been running.
+   */
+  public boolean hasStarted() {
+    return isRunning || lastStartTime > 0;
+  }
+
+  /**
    * Return true is simulation is running.
    *
    * @return True if simulation is running

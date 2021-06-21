@@ -4,6 +4,8 @@ import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.File;
+import java.util.zip.GZIPOutputStream;
+
 import org.apache.log4j.Logger;
 
 public class PcapExporter {
@@ -15,14 +17,27 @@ public class PcapExporter {
   }
 
   public void openPcap(File pcapFile) throws IOException {
+    this.openPcap(pcapFile, false);
+  }
+
+  public void openPcap(File pcapFile, boolean compress) throws IOException {
     if (out != null) {
       closePcap();
     }
     if (pcapFile == null) {
       /* pcap file not specified, use default file name */
-      pcapFile = new File("radiolog-" + System.currentTimeMillis() + ".pcap");
+      String filename = "radiolog-" + System.currentTimeMillis() + ".pcap";
+      if (compress) {
+        filename += ".gz";
+      }
+      pcapFile = new File(filename);
     }
-    out = new DataOutputStream(new FileOutputStream(pcapFile));
+    if (compress) {
+      out = new DataOutputStream(new GZIPOutputStream(new FileOutputStream(pcapFile)));
+    } else {
+      out = new DataOutputStream(new FileOutputStream(pcapFile));
+    }
+
     /* pcap header */
     out.writeInt(0xa1b2c3d4);
     out.writeShort(0x0002);
