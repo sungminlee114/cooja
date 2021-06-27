@@ -32,6 +32,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -186,24 +187,47 @@ public class SimEventCentral {
     }
   }
 
-  private PrintWriter startPrintWriter(PrintWriter output, String name, String suffix, String description) {
-    if (output == null) {
-      boolean compress = this.isDataTraceCompressed;
-      File outputFilename = getSimulationLogFile(name, suffix, compress);
-      if (outputFilename != null) {
-        try {
-          if (this.isDataTraceCompressed) {
-            output = new PrintWriter(new GZIPOutputStream(new FileOutputStream(outputFilename)));
-          } else {
-            output = new PrintWriter(new FileWriter(outputFilename, true));
-          }
-          if (description != null && !description.isBlank()) {
-            output.println("# "+ description);
-          }
-        } catch (IOException e) {
-          logger.error("failed to setup " + name + " output log", e);
+  public PrintWriter getSimulationLogWriter(String name, String suffix, String description) {
+    boolean compress = this.isDataTraceCompressed;
+    File outputFilename = getSimulationLogFile(name, suffix, compress);
+    PrintWriter output = null;
+    if (outputFilename != null) {
+      try {
+        if (compress) {
+          output = new PrintWriter(new GZIPOutputStream(new FileOutputStream(outputFilename)));
+        } else {
+          output = new PrintWriter(new FileWriter(outputFilename, true));
         }
+        if (description != null && !description.isBlank()) {
+          output.println("# " + description);
+        }
+      } catch (IOException e) {
+        logger.error("failed to setup " + name + " output log", e);
       }
+    }
+    return output;
+  }
+
+  public OutputStream getSimulationLogStream(String name, String suffix) {
+    boolean compress = this.isDataTraceCompressed;
+    File outputFilename = getSimulationLogFile(name, suffix, compress);
+    OutputStream output = null;
+    if (outputFilename != null) {
+      try {
+        output = new FileOutputStream(outputFilename);
+        if (compress) {
+          output = new GZIPOutputStream(output);
+        }
+      } catch (IOException e) {
+        logger.error("failed to setup " + name + " output stream", e);
+      }
+    }
+    return output;
+  }
+
+  private PrintWriter startSimulationLogWriter(PrintWriter output, String name, String suffix, String description) {
+    if (output == null) {
+      output = getSimulationLogWriter(name, suffix, description);
     }
     if (output != null) {
       output.println("# Simulation started: " + this.simulation.getSimulationTime());
@@ -211,13 +235,14 @@ public class SimEventCentral {
     return output;
   }
 
-  private void stopPrintWriter(PrintWriter output) {
+  private void stopSimulationLogWriter(PrintWriter output) {
     if (output != null) {
       output.println("# Simulation stopped: " + this.simulation.getSimulationTime());
+      output.flush();
     }
   }
 
-  private PrintWriter closePrintWriter(PrintWriter output) {
+  private PrintWriter closeSimulationLogWriter(PrintWriter output) {
     if (output != null) {
       output.println("# Simulation done: " + this.simulation.getSimulationTime());
       output.close();
@@ -241,20 +266,19 @@ public class SimEventCentral {
 
   void simulationStarted() {
     if (this.isDataTraceEnabled) {
-      this.moteLogOutput = startPrintWriter(this.moteLogOutput, "mote-output", "log",
-                                            "time\tmote\tmessage");
-      this.eventOutput = startPrintWriter(this.eventOutput, "events", "log",
-                                          "time\tname\tdescription");
-      this.radioMediumOutput = startPrintWriter(this.radioMediumOutput, "radio-medium", "log",
-                                                "startTime\tendTime\tchannel\tsource"
-                                                + "\tdestinations\tinterfered\tinterferedNonDestinations\tdata");
+      this.moteLogOutput = startSimulationLogWriter(this.moteLogOutput, "mote-output", "log",
+                                                    "time\tmote\tmessage");
+      this.eventOutput = startSimulationLogWriter(this.eventOutput, "events", "log",
+                                                  "time\tname\tdescription");
+      this.radioMediumOutput = startSimulationLogWriter(this.radioMediumOutput, "radio-medium", "log",
+                                                        "startTime\tendTime\tchannel\tsource"
+                                                                + "\tdestinations\tinterfered\tinterferedNonDestinations\tdata");
       if (this.pcapExporter == null) {
-        boolean compress = this.isDataTraceCompressed;
-        File pcapFile = getSimulationLogFile("radio-log", "pcap", compress);
-        if (pcapFile != null) {
+        OutputStream pcapStream = getSimulationLogStream("radio-log", "pcap");
+        if (pcapStream != null) {
           try {
             this.pcapExporter = new PcapExporter();
-            this.pcapExporter.openPcap(pcapFile, compress);
+            this.pcapExporter.setPcapStream(pcapStream);
           } catch (IOException e) {
             logger.error("failed to setup PCAP export", e);
           }
@@ -269,17 +293,17 @@ public class SimEventCentral {
 
   void simulationStopped() {
     logEvent("simulation", "stop");
-    stopPrintWriter(this.eventOutput);
-    stopPrintWriter(this.moteLogOutput);
-    stopPrintWriter(this.radioMediumOutput);
+    stopSimulationLogWriter(this.eventOutput);
+    stopSimulationLogWriter(this.moteLogOutput);
+    stopSimulationLogWriter(this.radioMediumOutput);
   }
 
   void removed() {
     /* Cleanup */
     logEvent("simulation", "done");
-    this.moteLogOutput = closePrintWriter(this.moteLogOutput);
-    this.radioMediumOutput = closePrintWriter(this.radioMediumOutput);
-    this.eventOutput = closePrintWriter(this.eventOutput);
+    this.moteLogOutput = closeSimulationLogWriter(this.moteLogOutput);
+    this.radioMediumOutput = closeSimulationLogWriter(this.radioMediumOutput);
+    this.eventOutput = closeSimulationLogWriter(this.eventOutput);
 
     if (this.pcapExporter != null) {
       try {
@@ -658,15 +682,17 @@ public class SimEventCentral {
 
     /* Data trace */
     element = new Element("datatrace");
+    if (this.isDataTraceCompressed) {
+      element.setAttribute("compress", Boolean.toString(this.isDataTraceCompressed));
+    }
     element.setText(Boolean.toString(this.isDataTraceEnabled));
     config.add(element);
 
     return config;
   }
 
-  public boolean setConfigXML(Simulation simulation,
-      Collection<Element> configXML, boolean visAvailable)
-      throws MoteTypeCreationException {
+  public boolean setConfigXML(Simulation simulation, Collection<Element> configXML, boolean visAvailable)
+          throws MoteTypeCreationException {
     for (Element element : configXML) {
       String name = element.getName();
       if (name.equals("logoutput")) {
@@ -675,6 +701,7 @@ public class SimEventCentral {
         /* Ignore configured data trace value if a data trace name has been set */
         if (this.traceName == null) {
           this.isDataTraceEnabled = Boolean.valueOf(element.getText());
+          this.isDataTraceCompressed = Boolean.valueOf(element.getAttributeValue("compress", "false"));
         }
       }
     }

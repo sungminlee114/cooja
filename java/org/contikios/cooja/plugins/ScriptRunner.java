@@ -46,6 +46,7 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Observable;
@@ -92,10 +93,10 @@ import org.contikios.cooja.util.StringUtils;
 @PluginType(PluginType.SIM_CONTROL_PLUGIN)
 public class ScriptRunner extends VisPlugin {
   private static final long serialVersionUID = 7614358340336799109L;
-  private static Logger logger = Logger.getLogger(ScriptRunner.class);
+  private static final Logger logger = Logger.getLogger(ScriptRunner.class);
 
   static boolean headless;
-  {
+  static {
     headless = GraphicsEnvironment.isHeadless();
     if (!headless) {
       DefaultSyntaxKit.initKit();
@@ -110,15 +111,15 @@ public class ScriptRunner extends VisPlugin {
       "plugins.js", "Interact with surrounding Cooja plugins",
   };
 
-  private Simulation simulation;
+  private final Simulation simulation;
   private LogScriptEngine engine;
 
-  private static BufferedWriter logWriter = null; /* For non-GUI tests */
+  private boolean isLogInitialized = false;
+  private static PrintWriter logWriter = null; /* For non-GUI tests */
+  private static PrintWriter dtWriter = null;
 
   private JEditorPane codeEditor;
   private JTextArea logTextArea;
-  private JSplitPane centerPanel;
-
   private JSyntaxLinkFile actionLinkFile = null;
   private File linkedFile = null;
 
@@ -203,10 +204,10 @@ public class ScriptRunner extends VisPlugin {
     });
 
     doLayout();
-    centerPanel = new JSplitPane(
-        JSplitPane.VERTICAL_SPLIT,
-        new JScrollPane(codeEditor),
-        new JScrollPane(logTextArea)
+    JSplitPane centerPanel = new JSplitPane(
+            JSplitPane.VERTICAL_SPLIT,
+            new JScrollPane(codeEditor),
+            new JScrollPane(logTextArea)
     );
 
     MenuListener toggleMenuItems = new MenuListener() {
@@ -310,8 +311,7 @@ public class ScriptRunner extends VisPlugin {
     updateTitle();
   }
 
-  public void setScriptActive(boolean active)
-  throws Exception {
+  public void setScriptActive(boolean active) {
     if (active) {
       /* setScriptActive(true) */
 
@@ -330,72 +330,78 @@ public class ScriptRunner extends VisPlugin {
 
       /* Create new engine */
       engine = new LogScriptEngine(simulation);
-      if (Cooja.isVisualized()) {
-        /* Attach visualized log observer */
-        engine.setScriptLogObserver(new Observer() {
-          public void update(Observable obs, Object obj) {
-            logTextArea.append((String) obj);
-            logTextArea.setCaretPosition(logTextArea.getText().length());
-          }
-        });
-      } else {
+      if (!Cooja.isVisualized()) {
         try {
-          /* Continously write test output to file */
+          /* Continuously write test output to file */
           if (logWriter == null) {
             /* Warning: static variable, used by all active test editor plugins */
             File logFile = new File("COOJA.testlog");
             if (logFile.exists()) {
               logFile.delete();
             }
-            logWriter = new BufferedWriter(new FileWriter(logFile));
-            logWriter.write("Random seed: " + simulation.getRandomSeed() + "\n");
+            logWriter = new PrintWriter(new FileWriter(logFile));
+            logWriter.println("Random seed: " + simulation.getRandomSeed());
             logWriter.flush();
           }
-          engine.setScriptLogObserver(new Observer() {
-            public void update(Observable obs, Object obj) {
-              try {
-                if (logWriter != null) {
-                  logWriter.write((String) obj);
-                  logWriter.flush();
-                } else {
-                  logger.fatal("No log writer: " + obj);
-                }
-              } catch (IOException e) {
-                logger.fatal("Error when writing to test log file: " + obj, e);
-              }
-            }
-          });
         } catch (Exception e) {
           logger.fatal("Create log writer error: ", e);
           setScriptActive(false);
         }
       }
+      if (engine != null) {
+        engine.setScriptLogObserver(new Observer() {
+          public void update(Observable obs, Object obj) {
+            String text = String.valueOf(obj);
+            if (text.endsWith("\n")) {
+              text = text.substring(0, text.length() - 1);
+            }
 
-      /* Activate engine */
-      try {
-        engine.activateScript(codeEditor.getText());
+            checkLogInit();
 
-        if (!headless) {
-          if (actionLinkFile != null) {
-            actionLinkFile.setEnabled(false);
+            PrintWriter out = dtWriter;
+            if (out != null) {
+              out.println(simulation.getSimulationTime() + "\t" + text);
+              out.flush();
+            }
+
+            if (logWriter != null) {
+              logWriter.println(text);
+            } else {
+              logger.fatal("No log writer: " + text);
+            }
+            if (Cooja.isVisualized()) {
+              logTextArea.append(text + '\n');
+              logTextArea.setCaretPosition(logTextArea.getText().length());
+            }
           }
-          logTextArea.setText("");
-          codeEditor.setEnabled(false);
-          updateTitle();
-        }
+        });
 
-        logger.info("Test script activated");
+        /* Activate engine */
+        try {
+          engine.activateScript(codeEditor.getText());
 
-      } catch (ScriptException e) {
-        logger.fatal("Test script error: ", e);
-        setScriptActive(false);
-        if (Cooja.isVisualized()) {
-          Cooja.showErrorDialog(Cooja.getTopParentContainer(),
-              "Script error", e, false);
+          if (!headless) {
+            if (actionLinkFile != null) {
+              actionLinkFile.setEnabled(false);
+            }
+            logTextArea.setText("");
+            codeEditor.setEnabled(false);
+            updateTitle();
+          }
+
+          logger.info("Test script activated");
+
+        } catch (ScriptException e) {
+          logger.fatal("Test script error: ", e);
+          setScriptActive(false);
+          if (Cooja.isVisualized()) {
+            Cooja.showErrorDialog(Cooja.getTopParentContainer(),
+                                  "Script error", e, false);
+          }
+        } catch (RuntimeException e) {
+          logger.fatal("Test script error: ", e);
+          setScriptActive(false);
         }
-      } catch (RuntimeException e) {
-        logger.fatal("Test script error: ", e);
-        setScriptActive(false);
       }
 
     } else {
@@ -409,16 +415,20 @@ public class ScriptRunner extends VisPlugin {
       }
 
       if (logWriter != null) {
-        try {
-          logWriter.write(
-              "Test ended at simulation time: " +
-              (simulation!=null?simulation.getSimulationTime():"?") + "\n");
-          logWriter.flush();
-          logWriter.close();
-        } catch (IOException e) {
-        }
+        logWriter.println("Test ended at simulation time: "
+                                  + (simulation.hasStarted() ? simulation.getSimulationTime() : "?"));
+        logWriter.flush();
+        logWriter.close();
         logWriter = null;
       }
+
+      if (dtWriter != null) {
+        dtWriter.flush();
+        dtWriter.close();
+        dtWriter = null;
+      }
+
+      this.isLogInitialized = false;
 
       if (!headless) {
         if (actionLinkFile != null) {
@@ -431,13 +441,27 @@ public class ScriptRunner extends VisPlugin {
     }
   }
 
+  private void checkLogInit() {
+    if (this.isLogInitialized) {
+      return;
+    }
+    this.isLogInitialized = true;
+
+    if (dtWriter == null) {
+      dtWriter = simulation.getEventCentral().getSimulationLogWriter("script", "log", "ScriptEngine output");
+      if (dtWriter != null) {
+        dtWriter.println(simulation.getSimulationTime() + "\tRandom seed: " + simulation.getRandomSeed());
+      }
+    }
+  }
+
   private void updateTitle() {
-    String title = "Simulation script editor ";
+    String title = "Simulation script editor";
     if (linkedFile != null) {
-      title += "(" + linkedFile.getName() + ") ";
+      title += " (" + linkedFile.getName() + ")";
     }
     if (isActive()) {
-      title += "*active*";
+      title += " *active*";
     }
     setTitle(title);
   }
@@ -478,7 +502,7 @@ public class ScriptRunner extends VisPlugin {
 
       final File logFile = new File(coojaBuild, "COOJA.testlog");
 
-      String command[] = {
+      String[] command = {
           "java",
           "-Djava.awt.headless=true",
           "-jar",
@@ -643,8 +667,8 @@ public class ScriptRunner extends VisPlugin {
 
   public boolean isActive() {
     return engine != null;
-
   }
+
   public void closePlugin() {
     try {
       setScriptActive(false);
