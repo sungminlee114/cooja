@@ -27,17 +27,29 @@
  */
 
 package org.contikios.cooja;
-
-import java.io.*;
-import java.lang.reflect.*;
-import java.net.*;
-import java.util.Vector;
-
+import org.apache.log4j.Logger;
 import org.contikios.cooja.MoteType.MoteTypeCreationException;
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.dialogs.MessageContainer;
 import org.contikios.cooja.dialogs.MessageList;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.lang.reflect.Constructor;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.Vector;
 
 /**
  * The purpose of corecomm's is communicating with a compiled Contiki system
@@ -72,10 +84,12 @@ import org.contikios.cooja.dialogs.MessageList;
  */
 public abstract class CoreComm {
 
-  // Static pointers to current libraries
-  private final static Vector<CoreComm> coreComms = new Vector<CoreComm>();
+  private final static Logger logger = Logger.getLogger(CoreComm.class);
 
-  private final static Vector<File> coreCommFiles = new Vector<File>();
+  // Static pointers to current libraries
+  private final static Vector<CoreComm> coreComms = new Vector<>();
+
+  private final static Vector<File> coreCommFiles = new Vector<>();
 
   private static int fileCounter = 1;
 
@@ -116,6 +130,17 @@ public abstract class CoreComm {
    * @return Class name
    */
   public static String getAvailableClassName() {
+    for (int i = 0; i < 1000; i++) {
+      String className = "Lib" + fileCounter;
+      String destFilename = className + ".java";
+      File destFile = new File("org/contikios/cooja/corecomm/" + destFilename);
+      if (destFile.exists()) {
+        fileCounter++;
+      } else {
+        return className;
+      }
+    }
+    logger.warn("too many remaining CoreComm source code files - please remove old files");
     return "Lib" + fileCounter;
   }
 
@@ -128,59 +153,43 @@ public abstract class CoreComm {
    * @throws MoteTypeCreationException
    *           If error occurs
    */
-  public static void generateLibSourceFile(String className)
-      throws MoteTypeCreationException {
-    BufferedWriter sourceFileWriter = null;
-    BufferedReader templateFileReader = null;
-    String destFilename = null;
+  public static void generateLibSourceFile(String className) throws MoteTypeCreationException {
+    String destFilename = className + ".java";
 
     try {
-      Reader reader;
-      String mainTemplate = Cooja
-          .getExternalToolsSetting("CORECOMM_TEMPLATE_FILENAME");
-
-      if ((new File(mainTemplate)).exists()) {
-        reader = new FileReader(mainTemplate);
-      } else {
-        InputStream input = CoreComm.class
-            .getResourceAsStream('/' + mainTemplate);
-        if (input == null) {
-          throw new FileNotFoundException(mainTemplate + " not found");
-        }
-        reader = new InputStreamReader(input);
-      }
-
-      templateFileReader = new BufferedReader(reader);
-      destFilename = className + ".java";
+      String mainTemplate = Cooja.getExternalToolsSetting("CORECOMM_TEMPLATE_FILENAME");
 
       File dir = new File("org/contikios/cooja/corecomm");
       if (!dir.exists()) {
         dir.mkdirs();
       }
 
-      sourceFileWriter = new BufferedWriter(new OutputStreamWriter(
-          new FileOutputStream("org/contikios/cooja/corecomm/" + destFilename)));
+      File destFile = new File("org/contikios/cooja/corecomm/" + destFilename);
 
-      // Replace special fields in template
-      String line;
-      while ((line = templateFileReader.readLine()) != null) {
-        line = line.replaceFirst("\\[CLASSNAME\\]", className);
-        sourceFileWriter.write(line + "\n");
+      Reader reader;
+      if ((new File(mainTemplate)).exists()) {
+        reader = new FileReader(mainTemplate);
+      } else {
+        InputStream input = CoreComm.class.getResourceAsStream('/' + mainTemplate);
+        if (input == null) {
+          throw new FileNotFoundException(mainTemplate + " not found");
+        }
+        reader = new InputStreamReader(input);
       }
 
-      sourceFileWriter.close();
-      templateFileReader.close();
+      try (BufferedReader templateFileReader = new BufferedReader(reader);
+           BufferedWriter sourceFileWriter = new BufferedWriter(new OutputStreamWriter(
+          new FileOutputStream(destFile)))) {
+        destFile.deleteOnExit();
+
+        // Replace special fields in template
+        String line;
+        while ((line = templateFileReader.readLine()) != null) {
+          line = line.replaceFirst("\\[CLASSNAME\\]", className);
+          sourceFileWriter.write(line + "\n");
+        }
+      }
     } catch (Exception e) {
-      try {
-        if (sourceFileWriter != null) {
-          sourceFileWriter.close();
-        }
-        if (templateFileReader != null) {
-          templateFileReader.close();
-        }
-      } catch (Exception e2) {
-      }
-
       throw (MoteTypeCreationException) new MoteTypeCreationException(
           "Could not generate corecomm source file: " + className + ".java")
           .initCause(e);
@@ -303,8 +312,7 @@ public abstract class CoreComm {
    *          Native library file
    * @return Core Communicator
    */
-  public static CoreComm createCoreComm(String className, File libFile)
-      throws MoteTypeCreationException {
+  public static CoreComm createCoreComm(String className, File libFile) throws MoteTypeCreationException {
     generateLibSourceFile(className);
 
     compileSourceFile(className);
