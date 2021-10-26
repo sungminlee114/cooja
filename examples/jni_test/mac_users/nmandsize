@@ -4,7 +4,7 @@ S="$(size -x -m -l $1)"
 
 parse() (
     echo "$S" |
-	awk --non-decimal-data '/^Segment/ {s=$2} s=="__DATA:" && $2=="'$1'" \
+	awk '/^Segment/ {s=$2} s=="__DATA:" && $2=="'$1'" \
 		{printf "%s %s 0x%x\n",$5,$3,($3+$5)}' |
 	(read start size end; 
 	 echo "$2 START: $start";
