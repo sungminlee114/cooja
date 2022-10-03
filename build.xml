@@ -8,6 +8,7 @@
   <property name="dist" location="dist"/>
   <property name="lib" location="lib"/>
   <property name="args" value="" />
+  <property name="datatrace" value="" />
 
   <target name="help">
     <echo>
@@ -201,9 +202,10 @@ The COOJA Simulator
     <ant antfile="build.xml" dir="apps/powertracker" target="jar" inheritAll="false"/>
   </target>
 
-  <target name="run_nogui" depends="init, compile, jar, copy configs">
+  <target name="run_nogui" depends="">
     <java fork="yes" dir="${build}" classname="org.contikios.cooja.Cooja" maxmemory="512m">
       <arg line="-nogui=${args}"/>
+      <arg line="-datatrace=${datatrace}"/>
       <env key="LD_LIBRARY_PATH" value="."/>
       <classpath>
         <pathelement path="${build}"/>
